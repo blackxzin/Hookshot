@@ -454,10 +454,10 @@ Shader::Profile make_profile() {
     p.support_scaled_attributes = false;   // (*_UI2F / *_I2F read as integers, converted in the shader: R32 has no scaled format)
     p.support_multi_viewport = true;
     p.support_sampled_image_array_nonuniform_indexing = true;
-    p.warp_size_potentially_larger_than_guest = false;
+    p.warp_size_potentially_larger_than_guest = dev.sg_wide != 0;   // (hookshot) GCN's 64 lanes: Eden's long path for the ballots, votes and shuffles
     p.lower_left_origin_mode = false;
     p.need_declared_frag_colors = false;
-    p.max_subgroup_size = 32;
+    p.max_subgroup_size = dev.sg_wide ? dev.sg_wide : 32;
     p.min_ssbo_alignment = dev.props.limits.minStorageBufferOffsetAlignment;
     return p;
 }
@@ -802,6 +802,7 @@ uint64_t disk_stamp() {
     add(&translator, sizeof translator);
     const uint32_t depth = host->depth_minus_w() != 0;   // (d3zessete's PR 54: programs made in either depth mode are kept apart)
     add(&depth, sizeof depth);
+    add(&dev.sg_wide, sizeof dev.sg_wide);   // (a program translated for 64-lane warps is another program)
     // (the records keep Shader::Info as it lies in memory: a cache written by another C++ library (the MSVC build's, then the
     // llvm-mingw one's libc++) has other layouts, and reading it crashed at start. The library and the sizes, so it starts again)
     const uint32_t abi[] = {(uint32_t)sizeof(Shader::Info), (uint32_t)sizeof(Program), (uint32_t)sizeof(std::vector<uint32_t>),
