@@ -286,8 +286,12 @@ bool create_device() {
         vkGetPhysicalDeviceProperties2(dev.physical, &p2);
         const bool pin = f13.subgroupSizeControl && sc.minSubgroupSize <= 32 && sc.maxSubgroupSize >= 32 && !getenv("RX_VK_NO_SUBGROUP_PIN");
         dev.sg32_stages = pin ? sc.requiredSubgroupSizeStages : 0;
-        logf("vk: subgroups: default %u lanes, %u-%u, pinned to 32 on stages %#x", sg.subgroupSize, sc.minSubgroupSize, sc.maxSubgroupSize,
-             (unsigned)dev.sg32_stages);
+        // (GCN, a Polaris or a Vega: 64 lanes and no other size, so the pin above cannot hold. The translator is told, and the
+        // ballots, votes and shuffles of the 32-lane programs are made for the wider subgroup. RX_VK_NO_WARP_EMU: as before)
+        const uint32_t widest = std::max(sg.subgroupSize, sc.maxSubgroupSize);
+        dev.sg_wide = !pin && widest > 32 && !getenv("RX_VK_NO_WARP_EMU") ? widest : 0;
+        logf("vk: subgroups: default %u lanes, %u-%u, pinned to 32 on stages %#x, 32-lane warps emulated on %u lanes", sg.subgroupSize,
+             sc.minSubgroupSize, sc.maxSubgroupSize, (unsigned)dev.sg32_stages, dev.sg_wide);
     }
     if (!f13.dynamicRendering || !f13.synchronization2 || !f12.timelineSemaphore) {
         logf("vk: the GPU lacks dynamic rendering, synchronization2 or timeline semaphores");

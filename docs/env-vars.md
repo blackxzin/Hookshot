@@ -14,7 +14,7 @@ supported options: read the code at the place named before you rely on one.
 | `HOOKSHOT_MSVC` | `nx2/make_game.py:272` | 1 |  |
 | `HOOKSHOT_NO_AV1_NOTICE` | `host/nn_video.c:251` | 1 |  |
 | `HOOKSHOT_NO_UPDATE_CHECK` | `host/hos_update.c:81` | 1 |  |
-| `HOOKSHOT_PREPARE_ONLY` | `gpu/vk/vk_main.cpp:391` | 1 |  |
+| `HOOKSHOT_PREPARE_ONLY` | `gpu/vk/vk_main.cpp:395` | 1 |  |
 | `HOOKSHOT_SDL2` | `nx2/build.py:536` | 1 | libSDL2-2.0.so.0 beside it, when the AppImage brings one |
 | `HOOKSHOT_SYSROOT` | `nx2/build.py:53` | 2 |  |
 | `HOOKSHOT_VERSION` | `nx2/test_version.py:35` | 2 |  |
@@ -276,7 +276,7 @@ supported options: read the code at the place named before you rely on one.
 | `RX_VALIDATION` | `gpu/render/rx_core.cpp:349` | 1 |  |
 | `RX_VK_9E5_SWAP` | `gpu/vk/vk_texture.cpp:1918` | 1 | hookshot, diagnosis: R and B swapped |
 | `RX_VK_ALL_COMPONENTS` | `gpu/vk/vk_draw.cpp:643` | 1 |  |
-| `RX_VK_ALL_GLOBAL_PROGS` | `gpu/vk/vk_shader.cpp:1041` | 1 |  |
+| `RX_VK_ALL_GLOBAL_PROGS` | `gpu/vk/vk_shader.cpp:1042` | 1 |  |
 | `RX_VK_ASTC_BC_MB` | `gpu/vk/vk_texture.cpp:1351` | 1 |  |
 | `RX_VK_ASTC_CPU` | `gpu/vk/vk_texture.cpp:267` | 1 |  |
 | `RX_VK_ASTC_RGBA8` | `gpu/vk/vk_texture.cpp:344` | 1 |  |
@@ -327,7 +327,7 @@ supported options: read the code at the place named before you rely on one.
 | `RX_VK_DUMP_PROGS` | `gpu/vk/vk_dump.cpp:279` | 1 |  |
 | `RX_VK_DUMP_RAW` | `gpu/vk/vk_dump.cpp:221` | 1 |  |
 | `RX_VK_DUMP_SAMPLED` | `gpu/vk/vk_draw.cpp:1438` | 1 |  |
-| `RX_VK_DUMP_SPV` | `gpu/vk/vk_shader.cpp:1087` | 1 |  |
+| `RX_VK_DUMP_SPV` | `gpu/vk/vk_shader.cpp:1088` | 1 |  |
 | `RX_VK_DUMP_SSBO` | `gpu/vk/vk_draw.cpp:1519` | 1 |  |
 | `RX_VK_DUMP_STAGES` | `gpu/vk/vk_shader.cpp:139` | 1 | hookshot, RX_VK_DUMP_STAGES=<folder>: control and code as the game has them |
 | `RX_VK_DUMP_STEPS` | `gpu/vk/vk_dump.cpp:291` | 1 |  |
@@ -337,7 +337,7 @@ supported options: read the code at the place named before you rely on one.
 | `RX_VK_EVICT_RENDERED` | `gpu/vk/vk_texture.cpp:2720` | 1 |  |
 | `RX_VK_EXPOSURE_LOG` | `gpu/vk/vk_draw.cpp:3160` | 1 |  |
 | `RX_VK_FAULT_INFO` | `gpu/vk/vk_draw.cpp:2054` | 1 | now, while the process is still alive: the faulting address |
-| `RX_VK_FIFO` | `gpu/vk/vk_main.cpp:348` | 1 |  |
+| `RX_VK_FIFO` | `gpu/vk/vk_main.cpp:352` | 1 |  |
 | `RX_VK_FLASH` | `gpu/vk/vk_replay.cpp:2467` | 1 |  |
 | `RX_VK_FLASH_CELLS` | `gpu/vk/vk_replay.cpp:2486` | 1 |  |
 | `RX_VK_FLASH_DIFF` | `gpu/vk/vk_replay.cpp:2485` | 1 |  |
@@ -363,7 +363,7 @@ supported options: read the code at the place named before you rely on one.
 | `RX_VK_HOLD_MS` | `gpu/vk/vk_replay.cpp:1558` | 1 |  |
 | `RX_VK_IGNORE_DISCARD` | `gpu/vk/vk_draw.cpp:78` | 1 |  |
 | `RX_VK_IMAGES_VRAM_ONLY` | `gpu/vk/vk_vma.cpp:81` | 1 |  |
-| `RX_VK_IMMEDIATE` | `gpu/vk/vk_main.cpp:351` | 1 |  |
+| `RX_VK_IMMEDIATE` | `gpu/vk/vk_main.cpp:355` | 1 |  |
 | `RX_VK_IMPORT_CHUNK_MB` | `gpu/vk/vk_memory.cpp:1296` | 2 |  |
 | `RX_VK_INVALIDATE_WAIT` | `gpu/vk/vk_replay.cpp:1971` | 1 |  |
 | `RX_VK_IR` | `gpu/vk/vk_shader.cpp:738` | 1 | the SPIR-V too, for spirv-val |
@@ -411,12 +411,12 @@ supported options: read the code at the place named before you rely on one.
 | `RX_VK_MIRROR_KEEP` | `gpu/vk/vk_memory.cpp:1858` | 1 | A/B: mirrors kept, as before |
 | `RX_VK_MIRROR_MB` | `gpu/vk/vk_memory.cpp:1423` | 1 |  |
 | `RX_VK_MIRROR_TIGHT` | `gpu/vk/vk_memory.cpp:1932` | 1 |  |
-| `RX_VK_MISS_LOG_PROG` | `gpu/vk/vk_shader.cpp:1035` | 1 |  |
+| `RX_VK_MISS_LOG_PROG` | `gpu/vk/vk_shader.cpp:1036` | 1 |  |
 | `RX_VK_MMA_NO_COOP` | `gpu/vk/vk_coopmat.cpp:359` | 1 |  |
 | `RX_VK_MMA_SOFTWARE` | `gpu/vk/vk_coopmat.cpp:348` | 1 |  |
 | `RX_VK_MOVIE_BLIT` | `gpu/vk/vk_draw.cpp:4411` | 1 |  |
 | `RX_VK_MOVIE_UPSCALE` | `gpu/vk/vk_draw.cpp:4474` | 1 |  |
-| `RX_VK_NAN_GUARD` | `gpu/vk/vk_shader.cpp:1147` | 1 |  |
+| `RX_VK_NAN_GUARD` | `gpu/vk/vk_shader.cpp:1148` | 1 |  |
 | `RX_VK_NATIVE_MMA` | `gpu/vk/vk_coopmat.cpp:354` | 1 |  |
 | `RX_VK_NATIVE_MMA_KEYS` | `gpu/vk/vk_shader.cpp:213` | 1 |  |
 | `RX_VK_NETWORK_KEEP` | `gpu/vk/vk_draw.cpp:4479` | 3 | amd-fix: 9dc98871 resolves the dynamic-resolution scene to 2048x1152; left out, the 3D picture is black under  |
@@ -444,6 +444,7 @@ supported options: read the code at the place named before you rely on one.
 | `RX_VK_NO_UPSCALE_STUB` | `gpu/vk/vk_draw.cpp:4484` | 1 |  |
 | `RX_VK_NO_VMAP_FLUSH` | `gpu/vk/vk_texture.cpp:1992` | 1 |  |
 | `RX_VK_NO_WARM` | `gpu/vk/vk_draw.cpp:4730` | 1 |  |
+| `RX_VK_NO_WARP_EMU` | `gpu/vk/vk_main.cpp:292` | 1 |  |
 | `RX_VK_NO_WRITEBACK` | `gpu/vk/vk_memory.cpp:2078` | 1 | an experiment: none |
 | `RX_VK_ONLY` | `nx2/build.py:356` | 1 | the Vulkan back end needs no game: built so with no lift, as the AppImage's is |
 | `RX_VK_OOT_EXPOSURE` | `gpu/vk/vk_shader.cpp:772` | 1 |  |
@@ -488,17 +489,17 @@ supported options: read the code at the place named before you rely on one.
 | `RX_VK_SLOW_DESC` | `gpu/vk/vk_draw.cpp:1473` | 1 |  |
 | `RX_VK_SLOW_DISPATCH` | `gpu/vk/vk_draw.cpp:4377` | 1 |  |
 | `RX_VK_SLOW_LOG` | `gpu/vk/vk_replay.cpp:2138` | 1 |  |
-| `RX_VK_SPARSE` | `gpu/vk/vk_main.cpp:302` | 1 |  |
+| `RX_VK_SPARSE` | `gpu/vk/vk_main.cpp:306` | 1 |  |
 | `RX_VK_SPARSE_IDLE` | `gpu/vk/vk_texture.cpp:2385` | 1 |  |
 | `RX_VK_SSBO_STRETCH` | `gpu/vk/vk_draw.cpp:1621` | 1 |  |
 | `RX_VK_SSBO_WIDE` | `gpu/vk/vk_draw.cpp:1632` | 1 |  |
 | `RX_VK_STAGING_KEEP_MB` | `gpu/vk/vk_texture.cpp:2558` | 1 |  |
-| `RX_VK_START_DELAY` | `gpu/vk/vk_main.cpp:399` | 1 | diagnosis: a long start, as the first one is |
+| `RX_VK_START_DELAY` | `gpu/vk/vk_main.cpp:403` | 1 | diagnosis: a long start, as the first one is |
 | `RX_VK_SUBMIT_DELAY_US` | `gpu/vk/vk_replay.cpp:3097` | 1 |  |
 | `RX_VK_SYNC_CAPTURE` | `gpu/vk/vk_replay.cpp:3093` | 1 |  |
 | `RX_VK_SYNC_LIVE` | `gpu/vk/vk_memory.cpp:557` | 1 |  |
 | `RX_VK_SYNC_PIPELINES` | `gpu/vk/vk_draw.cpp:856` | 1 |  |
-| `RX_VK_SYNC_SHADERS` | `gpu/vk/vk_shader.cpp:1565` | 1 |  |
+| `RX_VK_SYNC_SHADERS` | `gpu/vk/vk_shader.cpp:1566` | 1 |  |
 | `RX_VK_SYNC_WAITS` | `gpu/vk/vk_replay.cpp:1755` | 1 |  |
 | `RX_VK_TAAU_CLAMP` | `gpu/vk/vk_draw.cpp:4647` | 1 |  |
 | `RX_VK_TAAU_KEYS` | `gpu/vk/vk_draw.cpp:4572` | 1 |  |

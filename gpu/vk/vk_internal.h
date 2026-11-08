@@ -53,6 +53,7 @@ struct Device {
     VkPhysicalDeviceVulkan12Features vk12{};
     VkPhysicalDeviceVulkan13Features vk13{};
     VkShaderStageFlags sg32_stages = 0;   // (stages that run at 32 lanes when asked: the size the translated programs assume)
+    uint32_t sg_wide = 0;   // (the lanes of a subgroup that cannot be held to 32, GCN's 64: the translator then emulates 32-lane warps; 0: none)
     uint32_t max_push_descriptors = 0;
     // no window (HOS_HEADLESS): presents go to an image of their own, which RX_VK_SHOTS can write out
     bool offscreen = false;
