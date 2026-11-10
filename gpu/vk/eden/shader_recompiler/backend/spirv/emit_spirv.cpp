@@ -217,7 +217,17 @@ void Traverse(EmitContext& ctx, IR::Program& program) {
             ctx.OpReturn();
             break;
         case IR::AbstractSyntaxNode::Type::Unreachable:
-            ctx.OpUnreachable();
+            if (ctx.stage == Stage::Mesh && !ctx.mesh_fallback) {
+                // (hookshot) an indirect branch to none of its table's targets: the mesh shader leaves with no outputs.
+                // RADV makes OpUnreachable a return that leaves its output counts undefined, and GS_ALLOC_REQ then asked
+                // for a garbage count and hung the GPU (issue 1000). Marker for OpSetMeshOutputsEXT 0 0
+                // (PatchMeshInstructions); the epilogue writes the outputs, so none were written yet
+                ctx.OpStore(ctx.u32_zero_value, ctx.u32_zero_value);
+                ctx.mesh_zero_outputs_marker = true;
+                ctx.OpReturn();
+            } else {
+                ctx.OpUnreachable();
+            }
             break;
         }
         if (node.type != IR::AbstractSyntaxNode::Type::Block) {
@@ -263,6 +273,12 @@ spv::ExecutionMode ExecutionMode(TessSpacing spacing) {
 
 void DefineEntryPoint(const IR::Program& program, EmitContext& ctx, Id main) {
     const std::span interfaces(ctx.interfaces.data(), ctx.interfaces.size());
+    if (ctx.mesh_fallback && (program.stage == Stage::Task || program.stage == Stage::Mesh)) {
+        // (hookshot, issue 640: on a GPU without mesh shaders, a task or mesh program is a compute shader)
+        ctx.AddExecutionMode(main, spv::ExecutionMode::LocalSize, program.workgroup_size[0], 1U, 1U);
+        ctx.AddEntryPoint(spv::ExecutionModel::GLCompute, main, "main", interfaces);
+        return;
+    }
     spv::ExecutionModel execution_model{};
     switch (program.stage) {
     case Stage::Compute: {
@@ -287,8 +303,9 @@ void DefineEntryPoint(const IR::Program& program, EmitContext& ctx, Id main) {
         ctx.AddExecutionMode(main, spv::ExecutionMode::OutputVertices, program.mesh.max_vertices);
         ctx.AddExecutionMode(main, spv::ExecutionMode::OutputPrimitivesEXT,
                              program.mesh.max_primitives);
-        ctx.AddExecutionMode(main, program.mesh.topology == 1 ? spv::ExecutionMode::OutputLinesEXT
-                                                              : spv::ExecutionMode::OutputTrianglesEXT);
+        ctx.AddExecutionMode(main, program.mesh.Corners() == 1   ? spv::ExecutionMode::OutputPoints
+                                   : program.mesh.Corners() == 2 ? spv::ExecutionMode::OutputLinesEXT
+                                                                 : spv::ExecutionMode::OutputTrianglesEXT);
         break;
     case Stage::TessellationControl:
         execution_model = spv::ExecutionModel::TessellationControl;
@@ -611,7 +628,8 @@ void RewriteOpcodes(std::vector<u32>& code, std::span<const std::pair<u32, spv::
 void PatchMeshInstructions(std::vector<u32>& code, const EmitContext& ctx) {
     const bool set_outputs{Sirit::ValidId(ctx.mesh_outputs_marker[0])};
     const bool emit_tasks{Sirit::ValidId(ctx.mesh_tasks_marker[0])};
-    if (!set_outputs && !emit_tasks) {
+    const bool zero_outputs{ctx.mesh_zero_outputs_marker};
+    if (!set_outputs && !emit_tasks && !zero_outputs) {
         return;
     }
     const auto store_at = [&](size_t offset, Id pointer, Id object) {
@@ -629,6 +647,9 @@ void PatchMeshInstructions(std::vector<u32>& code, const EmitContext& ctx) {
         }
         if (set_outputs &&
             store_at(offset, ctx.mesh_outputs_marker[0], ctx.mesh_outputs_marker[1])) {
+            code[offset] = (3U << 16) | static_cast<u32>(spv::Op::OpSetMeshOutputsEXT);
+            patched = true;
+        } else if (zero_outputs && store_at(offset, ctx.u32_zero_value, ctx.u32_zero_value)) {
             code[offset] = (3U << 16) | static_cast<u32>(spv::Op::OpSetMeshOutputsEXT);
             patched = true;
         } else if (emit_tasks && store_at(offset, tasks[0], tasks[1]) &&
@@ -654,7 +675,17 @@ void PatchMeshInstructions(std::vector<u32>& code, const EmitContext& ctx) {
 std::vector<u32> EmitSPIRV(const Profile& profile, const RuntimeInfo& runtime_info, IR::Program& program, Bindings& bindings) {
     EmitContext ctx{profile, runtime_info, program, bindings};
     if (program.info.uses_cooperative_matrix && mma_software) DefineSoftwareMatrixFunction(ctx);
-    const Id main{DefineMain(ctx, program)};
+    Id main{};
+    if (runtime_info.mesh_fallback_vertex) {   // (hookshot: the fallback's generated vertex stage, which reads the records)
+        const Id void_function{ctx.TypeFunction(ctx.void_id)};
+        main = ctx.OpFunction(ctx.void_id, spv::FunctionControlMask::MaskNone, void_function);
+        ctx.AddLabel();
+        EmitMeshFallbackVertexBody(ctx);
+        ctx.OpReturn();
+        ctx.OpFunctionEnd();
+    } else {
+        main = DefineMain(ctx, program);
+    }
     DefineEntryPoint(program, ctx, main);
     if (profile.support_float_controls) {
         ctx.AddExtension("SPV_KHR_float_controls");

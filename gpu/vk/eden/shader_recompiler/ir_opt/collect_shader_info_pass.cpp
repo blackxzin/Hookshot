@@ -388,6 +388,7 @@ void VisitUsages(Info& info, IR::Inst& inst) {
     case IR::Opcode::GlobalAtomicOr32:
     case IR::Opcode::GlobalAtomicXor32:
     case IR::Opcode::GlobalAtomicExchange32:
+    case IR::Opcode::GlobalAtomicCompareExchange32:
     case IR::Opcode::GlobalAtomicIAdd64:
     case IR::Opcode::GlobalAtomicSMin64:
     case IR::Opcode::GlobalAtomicUMin64:
@@ -643,6 +644,7 @@ void VisitUsages(Info& info, IR::Inst& inst) {
     case IR::Opcode::StorageAtomicOr32:
     case IR::Opcode::StorageAtomicXor32:
     case IR::Opcode::StorageAtomicExchange32:
+    case IR::Opcode::StorageAtomicCompareExchange32:
         info.used_storage_buffer_types |= IR::Type::U32;
         break;
     case IR::Opcode::LoadStorage64:
@@ -984,6 +986,7 @@ thread_local u32 g_nvn2_compute_layout_end{0};
 thread_local bool g_nvn2_miss_log_this{true};
 /// (RX_VK_ALL_GLOBAL_PROGS=<key prefix>[,...], a test: the program's memory accesses all left global, none bound)
 thread_local bool g_all_global_this{false};
+thread_local bool g_gm_port_this{false};   // (hookshot: EDEN_NX2_GM_PORT_PROGS names the program being translated)
 
 void CollectShaderInfoPass(Environment& env, IR::Program& program) {
     Info& info{program.info};

@@ -6,11 +6,16 @@
 #                     the player's PC compiles the game with them. The play profile (work/hookshot_pieces.prof) wants
 #                     LLVM 23 or newer.
 #   python/           CPython (python-build-standalone) with lz4, numpy, capstone, unicorn and zstandard: the tools
+#                     (and nx2/prompt_requirements.txt's, which draw the button prompts)
+#   tk/               libtcl9tk9.0.so built with Xft, with libXft and libXrender: put over python/'s, which draws only
+#                     X core fonts (under XWayland one 13 px bitmap font, whatever the size asked for or the screen)
 #   ffmpeg/           FFmpeg's libavcodec, libswscale, libswresample, libavutil, static and LGPL, with dav1d for OoT's
 #                     AV1 movies (VP8 / VP9 too) - linked into the game
 #   sdl2/             libSDL2-2.0.so.0: the window, sound and controllers, placed beside the game
 #   cpm/              Vulkan-Headers, SPIRV-Headers and VulkanMemoryAllocator, in the CPM cache layout nx2/build.py reads
 #   appimagetool      the AppImage packer
+#   runtime-x86_64    the AppImage runtime it puts in front of the image (pinned: appimagetool's own download of the
+#                     'continuous' one, at packing time, fails whenever GitHub answers 504)
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 DEPS=${DEPS:-$PWD/build-linux/deps}
@@ -21,6 +26,9 @@ JOBS=$(nproc)
 LLVM_VER=23.1.5
 PY_TAG=20261026
 PY_VER=3.12.16
+TCLTK_VER=9.0.4   # (python-build-standalone's Tcl and Tk: its tk9.0 scripts stay, beside this libtcl9tk9.0.so)
+TCL_SHA256=d0aed49230bc02a65c1e0229e65f34590a4b037ec40d546f32573b467f7551ea
+TK_SHA256=d7a146d2917eb8b5cc95276dbf0e3d03c7464d2b19c1675357857c989301dbb4
 SDL_VER=2.32.10
 FFMPEG_VER=9.0.2
 DAV1D_VER=1.5.4
@@ -28,11 +36,38 @@ VK_HEADERS=v1.4.345
 SPIRV_HEADERS=vulkan-sdk-1.4.341.0
 VMA=v3.3.0
 APPIMAGETOOL=1.9.1
+APPIMAGE_RUNTIME=20251108
+APPIMAGE_RUNTIME_SHA256=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+# (the SHA-256 of each release download: a part whose download differs stops the script. Change them with the versions.
+# GitHub's and GitLab's tag archives (dav1d, the headers) are made on demand and not pinned here)
+LLVM_SHA256=f72edb0b36580ece7f52e23858f00c18fad4e87395ea7ad05d7e55c39f8fc78a
+PY_SHA256=ce4f6d0a6cfdb3bed6e44c2f9affd85943c76a42e25ad3a259002f31d6fb8a20
+FFMPEG_SHA256=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
+SDL_SHA256=5f5993c530f084535c65a6879e9b26ad441169b3e25d789d83287040a9ca5165
+APPIMAGETOOL_SHA256=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
 
-fetch() {   # url file
+CURL=(curl -fL --retry 5 --retry-delay 10 --proto '=https')
+# A GitHub release link (github.com/O/R/releases/download/TAG/NAME) can answer 504 for a long while: the same file is
+# then fetched through the GitHub API (with $GH_TOKEN when it is set).
+fetch_github_api() {   # url out
+    [[ $1 =~ ^https://github\.com/([^/]+/[^/]+)/releases/download/([^/]+)/([^/]+)$ ]] || return 1
+    local repo=${BASH_REMATCH[1]} tag=${BASH_REMATCH[2]} name=${BASH_REMATCH[3]} auth=() id
+    [ -n "${GH_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GH_TOKEN")
+    id=$("${CURL[@]}" -sS "${auth[@]}" "https://api.github.com/repos/$repo/releases/tags/$tag" |
+        python3 -c 'import json,sys; print(next(a["id"] for a in json.load(sys.stdin)["assets"] if a["name"] == sys.argv[1]))' "$name") ||
+        return 1
+    echo "release link failed: fetching $name through the GitHub API"
+    "${CURL[@]}" "${auth[@]}" -H "Accept: application/octet-stream" -o "$2" "https://api.github.com/repos/$repo/releases/assets/$id"
+}
+fetch() {   # url file [sha256: checked on every run, the download removed when it differs]
     if [ ! -f "$DL/$2" ]; then
-        curl -fL --retry 3 --proto '=https' -o "$DL/$2.part" "$1"
+        "${CURL[@]}" -o "$DL/$2.part" "$1" || fetch_github_api "$1" "$DL/$2.part"
         mv -f "$DL/$2.part" "$DL/$2"
+    fi
+    if [ -n "${3:-}" ] && ! echo "$3  $DL/$2" | sha256sum -c --quiet -; then
+        rm -f "$DL/$2"
+        echo "$2: not the expected download (SHA-256 differs)"
+        exit 1
     fi
 }
 done_for() { [ -f "$DEPS/.$1" ] && [ "$(cat "$DEPS/.$1")" = "$2" ]; }
@@ -40,7 +75,7 @@ mark() { echo "$2" > "$DEPS/.$1"; }
 
 # ---- LLVM: clang, lld and clang's own headers, nothing else ----
 if ! done_for llvm "$LLVM_VER"; then
-    fetch "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VER/LLVM-$LLVM_VER-Linux-X64.tar.xz" llvm.tar.xz
+    fetch "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VER/LLVM-$LLVM_VER-Linux-X64.tar.xz" llvm.tar.xz "$LLVM_SHA256"
     rm -rf "$DEPS/emsdk" "$DEPS/llvm-x"
     mkdir -p "$DEPS/llvm-x"
     tar -xJf "$DL/llvm.tar.xz" -C "$DEPS/llvm-x" --strip-components=1 --wildcards \
@@ -59,15 +94,38 @@ if ! done_for llvm "$LLVM_VER"; then
 fi
 
 # ---- Python and the tools' modules ----
-if ! done_for python "$PY_VER-$PY_TAG"; then
-    fetch "https://github.com/astral-sh/python-build-standalone/releases/download/$PY_TAG/cpython-$PY_VER+$PY_TAG-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz" python.tar.gz
+PY_MARK="$PY_VER-$PY_TAG-$(sha256sum nx2/prompt_requirements.txt | cut -c1-12)"   # (a new pin installs again)
+if ! done_for python "$PY_MARK"; then
+    fetch "https://github.com/astral-sh/python-build-standalone/releases/download/$PY_TAG/cpython-$PY_VER+$PY_TAG-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz" python.tar.gz "$PY_SHA256"
     rm -rf "$DEPS/python"
     tar -xzf "$DL/python.tar.gz" -C "$DEPS"
     "$DEPS/python/bin/python3" -m pip install --no-cache-dir --only-binary :all: --disable-pip-version-check -q \
-        "lz4==4.4.5" "numpy==2.5.4" "capstone==5.0.9" "unicorn==2.1.4" "zstandard==0.25.0"
+        "lz4==4.4.5" "numpy==2.5.4" "capstone==5.0.9" "unicorn==2.1.4" "zstandard==0.25.0" -r nx2/prompt_requirements.txt
     rm -rf "$DEPS/python/lib/python3.12/test" "$DEPS/python/lib/python3.12/idlelib" "$DEPS/python/lib/python3.12/ensurepip"
     find "$DEPS/python" -name __pycache__ -prune -exec rm -rf {} +
-    mark python "$PY_VER-$PY_TAG"
+    mark python "$PY_MARK"
+fi
+
+# ---- Tk with Xft (the builder window's fonts; Tcl is built only for Tk's configure and stub library) ----
+if ! done_for tk "$TCLTK_VER"; then
+    fetch "https://downloads.sourceforge.net/project/tcl/Tcl/$TCLTK_VER/tcl$TCLTK_VER-src.tar.gz" "tcl$TCLTK_VER.tar.gz"
+    fetch "https://downloads.sourceforge.net/project/tcl/Tcl/$TCLTK_VER/tk$TCLTK_VER-src.tar.gz" "tk$TCLTK_VER.tar.gz"
+    printf '%s  %s\n' "$TCL_SHA256" "$DL/tcl$TCLTK_VER.tar.gz" "$TK_SHA256" "$DL/tk$TCLTK_VER.tar.gz" | sha256sum -c -
+    rm -rf "$DEPS/src-tcl" "$DEPS/src-tk" "$DEPS/tk"
+    mkdir -p "$DEPS/src-tcl" "$DEPS/src-tk" "$DEPS/tk"
+    tar -xzf "$DL/tcl$TCLTK_VER.tar.gz" -C "$DEPS/src-tcl" --strip-components=1
+    tar -xzf "$DL/tk$TCLTK_VER.tar.gz" -C "$DEPS/src-tk" --strip-components=1
+    (cd "$DEPS/src-tcl/unix" && ./configure --enable-shared --with-system-libtommath=no && make -j"$JOBS" binaries)
+    # (no rpath: libXft and libXrender are found beside it through _tkinter's $ORIGIN/../..)
+    (cd "$DEPS/src-tk/unix" && ./configure --enable-shared --with-tcl="$DEPS/src-tcl/unix" --enable-xft --disable-libcups \
+        --disable-xss --disable-zipfs --disable-rpath && make -j"$JOBS" binaries)
+    cp "$DEPS/src-tk/unix/libtcl9tk9.0.so" "$DEPS/tk/"
+    strip --strip-unneeded "$DEPS/tk/libtcl9tk9.0.so"
+    readelf -d "$DEPS/tk/libtcl9tk9.0.so" | grep -q 'libXft\.so\.2' || { echo "Tk was built without Xft"; exit 1; }
+    cp -L /usr/lib/x86_64-linux-gnu/libXft.so.2 /usr/lib/x86_64-linux-gnu/libXrender.so.1 "$DEPS/tk/"
+    cp "$DEPS/src-tk/license.terms" "$DEPS/tk/Tk-license.terms"
+    rm -rf "$DEPS/src-tcl" "$DEPS/src-tk"
+    mark tk "$TCLTK_VER"
 fi
 
 # ---- dav1d and FFmpeg (static, position independent: linked into the game's executable) ----
@@ -78,7 +136,7 @@ if ! done_for ffmpeg "$FFMPEG_VER-$DAV1D_VER"; then
     mkdir -p "$DEPS/src-dav1d" && tar -xzf "$DL/dav1d.tar.gz" -C "$DEPS/src-dav1d" --strip-components=1
     (cd "$DEPS/src-dav1d" && meson setup build --prefix="$P" --libdir=lib --buildtype=release --default-library=static \
         -Db_staticpic=true -Denable_tools=false -Denable_tests=false -Denable_examples=false && ninja -C build install)
-    fetch "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VER.tar.xz" ffmpeg.tar.xz
+    fetch "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VER.tar.xz" ffmpeg.tar.xz "$FFMPEG_SHA256"
     mkdir -p "$DEPS/src-ffmpeg" && tar -xJf "$DL/ffmpeg.tar.xz" -C "$DEPS/src-ffmpeg" --strip-components=1
     (cd "$DEPS/src-ffmpeg" && PKG_CONFIG_PATH="$P/lib/pkgconfig" ./configure --prefix="$P" --pkg-config-flags=--static \
         --enable-static --disable-shared --enable-pic --disable-programs --disable-doc --disable-network --disable-autodetect \
@@ -92,7 +150,7 @@ fi
 
 # ---- SDL2 (its X11, Wayland and sound back ends load their libraries at run time) ----
 if ! done_for sdl2 "$SDL_VER"; then
-    fetch "https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VER/SDL2-$SDL_VER.tar.gz" sdl2.tar.gz
+    fetch "https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VER/SDL2-$SDL_VER.tar.gz" sdl2.tar.gz "$SDL_SHA256"
     rm -rf "$DEPS/src-sdl2" "$DEPS/sdl2"
     mkdir -p "$DEPS/src-sdl2" && tar -xzf "$DL/sdl2.tar.gz" -C "$DEPS/src-sdl2" --strip-components=1
     cmake -S "$DEPS/src-sdl2" -B "$DEPS/src-sdl2/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF \
@@ -121,7 +179,7 @@ if ! done_for cpm "$VK_HEADERS-$SPIRV_HEADERS-$VMA"; then
 fi
 
 # ---- the licenses of what the AppImage carries (Python's and its modules' are in python/) ----
-if ! done_for licenses "$LLVM_VER-$FFMPEG_VER-$DAV1D_VER-$SDL_VER"; then
+if ! done_for licenses "$LLVM_VER-$FFMPEG_VER-$DAV1D_VER-$SDL_VER-$TCLTK_VER"; then
     L=$DEPS/licenses
     rm -rf "$L" && mkdir -p "$L"
     curl -fsSL -o "$L/LLVM-LICENSE.TXT" "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-$LLVM_VER/llvm/LICENSE.TXT"
@@ -129,13 +187,22 @@ if ! done_for licenses "$LLVM_VER-$FFMPEG_VER-$DAV1D_VER-$SDL_VER"; then
     curl -fsSL -o "$L/FFmpeg-LICENSE.md" "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n$FFMPEG_VER/LICENSE.md"
     curl -fsSL -o "$L/dav1d-COPYING" "https://code.videolan.org/videolan/dav1d/-/raw/$DAV1D_VER/COPYING"
     cp "$DEPS/sdl2/LICENSE.txt" "$L/SDL2-LICENSE.txt"
-    mark licenses "$LLVM_VER-$FFMPEG_VER-$DAV1D_VER-$SDL_VER"
+    cp "$DEPS/tk/Tk-license.terms" "$L/Tk-license.terms"
+    cp /usr/share/doc/libxft2/copyright "$L/libXft-copyright"
+    cp /usr/share/doc/libxrender1/copyright "$L/libXrender-copyright"
+    mark licenses "$LLVM_VER-$FFMPEG_VER-$DAV1D_VER-$SDL_VER-$TCLTK_VER"
 fi
 
 # ---- appimagetool ----
 if ! done_for appimagetool "$APPIMAGETOOL"; then
-    fetch "https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL/appimagetool-x86_64.AppImage" appimagetool
+    fetch "https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL/appimagetool-x86_64.AppImage" appimagetool "$APPIMAGETOOL_SHA256"
     cp "$DL/appimagetool" "$DEPS/appimagetool" && chmod +x "$DEPS/appimagetool"
     mark appimagetool "$APPIMAGETOOL"
+fi
+if ! done_for runtime "$APPIMAGE_RUNTIME"; then
+    fetch "https://github.com/AppImage/type2-runtime/releases/download/$APPIMAGE_RUNTIME/runtime-x86_64" "runtime-x86_64-$APPIMAGE_RUNTIME"
+    echo "$APPIMAGE_RUNTIME_SHA256  $DL/runtime-x86_64-$APPIMAGE_RUNTIME" | sha256sum -c -
+    cp "$DL/runtime-x86_64-$APPIMAGE_RUNTIME" "$DEPS/runtime-x86_64"
+    mark runtime "$APPIMAGE_RUNTIME"
 fi
 echo "deps in $DEPS: $(du -sh --exclude=downloads "$DEPS" | cut -f1)"

@@ -17,10 +17,35 @@
    guest or host access to a page nothing committed is committed on first touch, 64 KB at a time, by the handler. */
 void hos_commit(uint64_t addr, uint64_t size) {
     if (!size) return;
+    if (!hos_guest_range(addr, size)) {   /* (hookshot: guest pages only; the posix layer's commit changes any page's protection) */
+        hos_log("mem: commit of %#llx bytes at %#llx: outside the guest window", (unsigned long long)size, (unsigned long long)addr);
+        return;
+    }
     const uint64_t lo = addr & ~0xFFFFULL, hi = (addr + size + 0xFFFF) & ~0xFFFFULL;
-    if (!VirtualAlloc(GP(lo), (SIZE_T)(hi - lo), MEM_COMMIT, PAGE_READWRITE))
+    if (!VirtualAlloc(GP(lo), (SIZE_T)(hi - lo), MEM_COMMIT, PAGE_READWRITE)) {
+        const DWORD err = GetLastError();
         hos_log("mem: commit of %#llx bytes at %#llx failed (error %lu)", (unsigned long long)(hi - lo),
-                (unsigned long long)lo, GetLastError());
+                (unsigned long long)lo, err);
+        if (err == ERROR_COMMITMENT_LIMIT) {   /* (1455: RAM and page file full; the game crashes soon after. Said once, on its own thread) */
+            static volatile LONG said;
+            if (InterlockedExchange(&said, 1) == 0) {
+                hos_log("mem: Windows is out of memory (RAM and page file): close other programs, or let Windows manage the page file size");
+                extern DWORD WINAPI hos_out_of_memory_box(LPVOID);
+                CloseHandle(CreateThread(NULL, 0, hos_out_of_memory_box, NULL, 0, NULL));
+            }
+        }
+    }
+}
+
+DWORD WINAPI hos_out_of_memory_box(LPVOID unused) {
+    (void)unused;
+    MessageBoxA(NULL,
+                "Windows has run out of memory (RAM plus the page file), so Hookshot may close.\n\n"
+                "Close other programs, and in Windows' System > About > Advanced system settings > Performance > Advanced > Virtual "
+                "memory, choose \"Automatically manage paging file size\" (or give it at least 16 GB). A lower Quality preset in the "
+                "Insert menu also uses less memory.",
+                "Hookshot: out of memory", MB_OK | MB_ICONWARNING | MB_TOPMOST);
+    return 0;
 }
 
 static LONG CALLBACK commit_on_touch(EXCEPTION_POINTERS *info) {
@@ -632,10 +657,17 @@ void hos_gpu_queue_submit(int channel_fd, const uint64_t *entries, uint32_t n, i
 /* The loop-header interrupt polls (nx2/poll.py): the virtual cores (HOS_VCORES) ask a thread holding a core a
    waiter should have to give it up there, so guest code with no nn::os call or SVC in it (a long job) is preempted
    as Horizon would preempt it. */
-void a64_poll(Ctx *c) {
-    c->poll = 0;
+/* (nx2/rtgen.py) the loop-header poll: the lifted code has cleared c->poll and calls this with no argument, so that the
+   compiler keeps guest registers in host registers across the loop header (a call handed the context could change any
+   of it). The thread's context is the running one's (hos_ctx: a fiber's while it runs one), which is where the kick
+   (hos_thread.c) set the flag; nothing here reads it */
+void a64_poll_cur(void) {
     void hos_vcore_checkpoint(void);
     hos_vcore_checkpoint();
+}
+void a64_poll(Ctx *c) {   /* (the old form, A64_POLL_CTX builds) */
+    c->poll = 0;
+    a64_poll_cur();
 }
 
 /* CNTPCT_EL0 at the Switch 2's 31.25 MHz (rt/a64_rt.c's default counts the Switch 1's 19.2 MHz). The SDK checks
